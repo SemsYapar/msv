@@ -94,9 +94,9 @@ struct VampireSurvivors_Objects_Characters_CharacterController_Fields {
 Not struct ın içinde başka struct lar varsa onları da atın. cpp header larının özelliği olan inherit struct pycparser tarafından desteklenmediği için inherit edilen struct un size ı kadar boyutta filler bir struct oluşturup esas struct un içine atın ki sıra kaymasın(Attığım targetstruct.h dosyasında bunun örnekleri var)
 <img width="1124" height="210" alt="image" src="https://github.com/user-attachments/assets/9d6d1ed5-d271-487c-91b6-469ddee16a40" />
 
- - hedef process id: pid/p
- - hedef process deki struct adresi: address/a
- - hedef struct ismi: struct_name/s
+- hedef process id: pid/p
+- hedef process deki struct adresi: address/a
+- hedef struct ismi: struct_name/s
 
 `python stv.py -p=29132 -a=0000022FB961D650 -s=VampireSurvivors_Objects_Characters_CharacterController_Fields`
 <img width="1492" height="681" alt="image" src="https://github.com/user-attachments/assets/88236bf7-30d5-4d76-aa7d-bcf683820b31" />
