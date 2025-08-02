@@ -1,6 +1,8 @@
 # stv
 memory struct viewer
 
+önce pycparser ı indirin:
+pip install pycparser
 
 targetstruct.h ve stw.py aynı dizinde olsun
 memory de görmek istediğiniz struct u targetstruct.h dosyasına atın:
