@@ -1,4 +1,4 @@
-# stv
+# mtv
 memory struct viewer
 
 önce pycparser ı indirin:
