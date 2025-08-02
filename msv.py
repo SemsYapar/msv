@@ -95,14 +95,14 @@ def read_process_memory(pid, address, size):
 
 ap = argparse.ArgumentParser(description="Process some integers.")
 ap.add_argument("-p",'--pid', type=int, required=True, help='Process ID to read memory from')
-ap.add_argument("-a",'--address', type=lambda x:int(x,16), required=True, help='Memory address to read from')
+ap.add_argument("-a",'--address', type=lambda x: eval(x, {"__builtins__": None}, {}), required=True, help='Memory address to read from')
 ap.add_argument("-s",'--struct_name', type=str, required=True, help='Name of the struct to display')
 ap.add_argument("-f",'--file', type=str, default='targetstruct.h', help='Header file containing struct definitions')
 args = ap.parse_args()
 
 POINTER_SIZE = 8 if is_process_64bit(args.pid) else 4
 
-struct_aligns = {
+special_type_aligns = {
 
 }
 
@@ -151,14 +151,16 @@ def get_type_name(type_node):
             return ' '.join(t.names)
         elif isinstance(t, c_ast.Struct):
             return f"{t.name}"
+        elif isinstance(t, c_ast.Union):
+            return f"{t.name}"
         else:
             return str(t)
     elif isinstance(type_node, c_ast.PtrDecl):
         if isinstance(type_node.type, c_ast.FuncDecl):
-            return get_type_name(type_node.type.type) + ' (*)('+ ', '.join(get_type_name(param.type) + " " + param.name for param in type_node.type.args.params) +')'
+            return get_type_name(type_node.type.type) + ' (*)'+('('+ ', '.join(get_type_name(param.type) + (" " + param.name if param.name != None else "") for param in type_node.type.args.params) +')' if type_node.type.args else '()')
         return get_type_name(type_node.type) + '*'
-    elif isinstance(type_node, c_ast.FuncDecl):
-        return get_type_name(type_node.type) + ' ('+ ', '.join(get_type_name(param.type) + " " + param.name for param in type_node.args.params) +')'
+    #elif isinstance(type_node, c_ast.FuncDecl):
+    #    return get_type_name(type_node.type) + ' ('+ ', '.join(get_type_name(param.type) + " " + param.name for param in type_node.args.params) +')'
     elif isinstance(type_node, c_ast.ArrayDecl):
         arr_type = get_type_name(type_node.type)
         arr_dim = None
@@ -174,8 +176,8 @@ def get_type_name(type_node):
     else:
         return str(type_node)
 
+
 def get_type_size(type_str):
-    """Basitçe tipin toplam boyutunu hesapla, array varsa çarp."""
     if '[' in type_str:
         base, rest = type_str.split('[', 1)
         arr_dim = int(rest.split(']',1)[0])
@@ -187,7 +189,7 @@ def get_type_size(type_str):
         return type_sizes[type_str]
     else:
         raise ValueError(f"Uyarı: Bilinmeyen tip '{type_str}' için boyut hesaplanamadı.")
-        return 0
+
 def get_alignment(type_str):
     """Bir tipin alignment gereksinimini döner."""
     if type_str.endswith('*') or '(*)' in type_str:
@@ -195,15 +197,36 @@ def get_alignment(type_str):
     if '[' in type_str:
         base, _ = type_str.split('[', 1)
         return get_alignment(base)
-    if type_str in struct_aligns:
-        return struct_aligns[type_str]
+    if type_str in special_type_aligns:
+        return special_type_aligns[type_str]
     if type_str in type_sizes:
         return type_sizes[type_str]
     raise ValueError(f"Bilinmeyen tip '{type_str}' için alignment hesaplanamadı.")
     
-def align(offset, alignment):
-    """Verilen offset'i alignment'a uygun şekilde yukarı yuvarla."""
+def get_endoffset_of_field(offset, alignment):
     return (offset + alignment - 1) & ~(alignment - 1)
+
+def parse_union_fields(union_node):
+    offset = 0
+    fields = []
+    max_align = 1
+    max_size = 0
+    for decl in union_node.decls:
+        name = decl.name
+        type_str = get_type_name(decl.type)
+        size = get_type_size(type_str)
+        max_size = max(max_size, size)
+        align_req = get_alignment(type_str)
+        max_align = max(max_align, align_req)
+        fields.append({'name': name, 'type': type_str, 'offset': 0, 'size': size})
+
+    union_endoffset = get_endoffset_of_field(0, max_align)
+    special_type_aligns[union_node.name] = max_align
+    end_padding = union_endoffset - max_size
+    if end_padding > 0:
+        fields.append({'name': '__padding_end', 'type': 'char[]', 'size': end_padding, 'offset': offset})
+    type_sizes[union_node.name] = max_size
+    return fields
 
 def parse_struct_fields(struct_node):
     offset = 0
@@ -216,41 +239,46 @@ def parse_struct_fields(struct_node):
         align_req = get_alignment(type_str)
         max_align = max(max_align, align_req)
 
-        aligned_offset = align(offset, align_req)
-        padding = aligned_offset - offset
+        endoffset = get_endoffset_of_field(offset, align_req)
+        padding = endoffset - offset
         if padding > 0:
             fields.append({'name': f'__padding_before_{name}', 'type': 'char[]', 'size': padding, 'offset': offset})
-        offset = aligned_offset
+        offset = endoffset
 
         fields.append({'name': name, 'type': type_str, 'offset': offset, 'size': size})
         offset += size
         
-    struct_aligns[struct_node.name] = max_align
+    special_type_aligns[struct_node.name] = max_align
     # Struct sonu padding (struct align için)
-    total_size = align(offset, max_align)
-    end_padding = total_size - offset
+    struct_endoffset = get_endoffset_of_field(offset, max_align)
+    end_padding = struct_endoffset - offset
     if end_padding > 0:
         fields.append({'name': '__padding_end', 'type': 'char[]', 'size': end_padding, 'offset': offset})
 
-    type_sizes[struct_node.name] = total_size
+    type_sizes[struct_node.name] = struct_endoffset
     return fields
 
-class StructVisitor(c_ast.NodeVisitor):
+class BlockVisitor(c_ast.NodeVisitor):
     def __init__(self):
         self.structs = {}
+        self.unions = {}
 
     def visit_Struct(self, node):
         if node.decls and node.name:  # isimli structlar
             fields = parse_struct_fields(node)
             self.structs[node.name] = fields
+    def visit_Union(self, node):
+        if node.decls and node.name:
+            fields = parse_union_fields(node)
+            self.unions[node.name] = fields
 
-def parse_structs(filename):
+def parse_blocks(filename):
     ast = parse_file(filename)
-    v = StructVisitor()
+    v = BlockVisitor()
     v.visit(ast)
-    return v.structs
+    return v.structs,v.unions
 
-def display_struct_table(struct_fields, raw_data):
+def display_block_table(block_fields, raw_data):
     headers = ["Offset", "Size", "Type", "Name", "Value"]
     col_widths = [8, 6, 50, 50, 35]
 
@@ -265,13 +293,13 @@ def display_struct_table(struct_fields, raw_data):
     print_row(headers)
     print_border()
 
-    for field in struct_fields:
+    for field in block_fields:
         offset = field['offset']
         size = field['size']
         name = field['name']
         type_str = field['type']
         data = raw_data[offset:offset + size]
-        if type_str.endswith('*') or "ptrdiff_t" == type_str or "uintptr_t" == type_str or "intptr_t" == type_str:
+        if "*" in type_str or "ptrdiff_t" == type_str or "uintptr_t" == type_str or "intptr_t" == type_str:
             value = f"0x{int.from_bytes(data, 'little'):016X}"
         elif "int" in type_str or "size_t" == type_str or "ssize_t" == type_str or "long" in type_str or "short" in type_str:
             signed = ('int' in type_str and 'uint' not in type_str) or ("signed" in type_str and "unsigned" not in type_str) or ("ssize_t" == type_str and "size_t" != type_str )
@@ -296,20 +324,25 @@ def display_struct_table(struct_fields, raw_data):
 
 
 if __name__ == '__main__':
-    structs = parse_structs(args.file)
+    structs, unions = parse_blocks(args.file)
     s_json = json.dumps(structs, indent=4)
     #print(s_json)
 
-    struct_name = args.struct_name
-    if struct_name not in structs:
-        print(f"{struct_name} tanımlı değil.")
+    block_name = args.struct_name
+    if block_name in structs:
+        block_fields = structs[block_name]
+        total_size = type_sizes[block_name]
+    elif block_name in unions:
+        block_fields = unions[block_name]
+        total_size = type_sizes[block_name]    
+    else:
+        print(f"{block_name} tanımlı değil.")
         exit(1)
 
-    struct_fields = structs[struct_name]
-    total_size = type_sizes[struct_name]
+
 
     try:
         raw_data = read_process_memory(args.pid, args.address, total_size)
-        display_struct_table(struct_fields, raw_data)
+        display_block_table(block_fields, raw_data)
     except Exception as e:
         print(f"Hata: {e}")
