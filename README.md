@@ -91,11 +91,13 @@ struct VampireSurvivors_Objects_Characters_CharacterController_Fields {
 	bool _AlwaysRandomLimitBreak_k__BackingField;
 };
 ```
-Not:
+targetstruct kısıtlamaları:
 - struct ın içinde başka struct lar varsa onları da targetstruct.h dosyasına atın.
 - cpp header larının özelliği olan inherit struct pycparser tarafından desteklenmediği için inherit edilen struct un size ı kadar boyutta filler bir struct oluşturup esas struct un içine atın ki sıra kaymasın(attığım targetstruct.h dosyasında bunun örnekleri var)
-- targetstruct.h daki bazı kısıtlamalar: yorum satırı olamaz. bool, int8_t gibi çok genel tipleri bile tanımlamanız lazım
-<img width="1124" height="210" alt="image" src="https://github.com/user-attachments/assets/9d6d1ed5-d271-487c-91b6-469ddee16a40" />
+- <img width="1124" height="210" alt="image" src="https://github.com/user-attachments/assets/9d6d1ed5-d271-487c-91b6-469ddee16a40" />
+- yorum satırı olamaz. bool, int8_t gibi çok genel tipleri bile tanımlamanız lazım, anonim yapıları yok(struct içine isimsiz struct, union gibi) bakmak istediğiniz struct da böyl bir anonim yapı varsa dışarda tanımlayıp içeri tanımlı yapıyı koyun
+- <img width="1568" height="682" alt="image" src="https://github.com/user-attachments/assets/b320c72a-f015-4e9d-9157-f7149e75b515" />
+
 
 - hedef process id: pid/p
 - hedef process deki struct adresi: address/a
