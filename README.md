@@ -105,6 +105,6 @@ targetstruct kısıtlamaları:
 - hedef process deki struct adresi: address/a
 - hedef struct ismi: struct_name/s
 
-`python stv.py -p=29132 -a=0000022FB961D650 -s=VampireSurvivors_Objects_Characters_CharacterController_Fields`
-<img width="1502" height="560" alt="image" src="https://github.com/user-attachments/assets/835d8902-58a0-4984-a0ed-4d67249a2387" />
+<img width="1491" height="558" alt="image" src="https://github.com/user-attachments/assets/520253da-2054-4d2f-8db2-3b1ec7b8e7f8" />
+
 
